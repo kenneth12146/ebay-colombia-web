@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   Package, Truck, CheckCircle, Clock, ExternalLink,
   RefreshCw, Search, ImageOff, LayoutGrid, List,
-  X, DollarSign, ChevronRight, AlertCircle, Box, Anchor, ShoppingBag
+  X, DollarSign, ChevronRight, AlertCircle, Box, Anchor, ShoppingBag, Trash2
 } from 'lucide-react';
 import api from '../lib/axios';
 
@@ -93,8 +93,22 @@ function StatusBadge({ estado, size = 'sm' }) {
 
 // ─── Modal de Detalle ─────────────────────────────────────────────────────────
 
-function DetailModal({ product, onClose }) {
+function DetailModal({ product, onClose, onDelete }) {
   if (!product) return null;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    setDeleting(true);
+    try {
+      await onDelete(product.id);
+      onClose();
+    } catch {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   const costoTotal = calcCostoTotal(product);
 
@@ -203,6 +217,37 @@ function DetailModal({ product, onClose }) {
             )}
           </div>
           
+          {/* Botón eliminar producto */}
+          <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+            {confirmDelete ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-2xl text-sm font-bold border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-2xl text-sm font-bold bg-red-500 hover:bg-red-600 text-white transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {deleting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {deleting ? 'Eliminando...' : '¿Confirmar eliminar?'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleDelete}
+                className="w-full py-2.5 rounded-2xl text-sm font-bold text-red-500 dark:text-red-400 border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Eliminar producto
+              </button>
+            )}
+          </div>
+
           {/* Espaciador para mobile bottom nav si existiera o para safe area */}
           <div className="h-6 sm:h-0"></div>
         </div>
@@ -402,6 +447,13 @@ export default function EbaySync() {
     setLoading(false);
   }, [statusFilter, searchTerm, products, vendidos]);
 
+  const handleDelete = async (productId) => {
+    await api.delete(`/products/${productId}`);
+    setProducts(prev => prev.filter(p => p.id !== productId));
+    setVendidos(prev => prev.filter(p => p.id !== productId));
+    setVendidosCount(prev => Math.max(0, prev - 1));
+  };
+
   const handleSync = async () => {
     setSyncing(true);
     setSyncMsg(null);
@@ -581,7 +633,7 @@ export default function EbaySync() {
 
       {/* Modal Detalle */}
       {selectedProduct && (
-        <DetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
+        <DetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onDelete={handleDelete} />
       )}
 
       {/* Estilos adicionales para ocultar scrollbar en los filtros móviles */}
